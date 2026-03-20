@@ -1,7 +1,8 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from io import StringIO
 
 # ============================================================================
@@ -225,7 +226,7 @@ st.markdown("""
 This tool analyzes how carbon pricing influences technology adoption for emission-intensive sectors.
 It allows you to change parameters related to the way firms take their investment decisions, define up to three different mitigation technologies, and look at the resulting dynamics for a given facility, as well as for a set of facilities that might represent a given sector/region.
 
-The tool is organised in three sections. **Parameters** is where you can define/modify parameters related to the decision-making process of firmsand the characteristics of three mitigation technologies.
+The tool is organised in three sections. **Parameters** is where you can define/modify parameters related to the characteristics of three mitigation technologies, and the decision-making process of firms.
 Then, the **Single Facility Analysis** replicates a typical decision process at the facility level. Given its initial carbon intensity, at what carbon price is it effective to invest in a cleaner technology?
 Finally, the **Sector Analysis** extends the results of the facility analysis to a set of facilities representative of a sector/region (you can upload your own list of facility characteristics).
 
@@ -239,34 +240,16 @@ st.markdown('<p style="color: gray; font-style: italic;">Last update: March 2026
 # ============================================================================
 st.header("Parameters")
 
-st.subheader("Global Parameters")
 st.markdown("""
-These parameters define the economic context for investment decisions:
-- **Project Lifetime**: How long the technology investment will generate benefits (depreciation horizon)
-- **Discount Rate**: The rate used to discount future cash flows (reflects cost of capital and risk)
-- **Expected Carbon Price Growth**: Annual growth rate firms expect for carbon prices when making decisions
-""")
+The model allows you to define up to three decarbonization technologies. Each technology is characterized by an **improvement percentage** (the percentage reduction in emission intensity from the starting point), a **target range** (the achievable intensity range after applying the technology), and an **investment** cost (capital expenditure required per unit of production capacity in year 0).
+This allows you to represent different types of technologies: energy efficiency improvements (whose target intensity depends on the starting point) or alternative technologies (whose target intensity is more fixed—in this case, focus on setting the target range).
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    project_lifetime = st.number_input("Project Lifetime (years)", 5, 40, 20)
-with col2:
-    discount_rate = st.number_input("Discount Rate", 0.01, 0.20, 0.10, 0.01, format="%.2f")
-with col3:
-    carbon_price_growth = st.number_input("Expected Carbon Price Growth", 0.00, 0.15, 0.05, 0.01, format="%.2f")
-
-st.subheader("Technology Definitions")
-st.markdown("""
-Define three decarbonization technologies. Each technology is characterized by:
-- **Improvement %**: Percentage reduction in emission intensity from the starting point
-- **Target Range**: The achievable intensity range (min-max) after applying the technology
-- **Investment**: Capital expenditure required per unit of production capacity (EUR per tonne)
 """)
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.markdown("**Technology 1**")
+    st.markdown('<p style="font-weight: bold; color: #17A589;">Technology 1</p>', unsafe_allow_html=True)
     tech1_name = st.text_input("Name", "Alternative fuels", key="tech1_name")
     t1c1, t1c2 = st.columns(2)
     with t1c1:
@@ -277,7 +260,7 @@ with col1:
         tech1_target_max = st.number_input("Target Max (tCO2/t)", 0.0, 1.5, 0.850, 0.01, key="tech1_max")
 
 with col2:
-    st.markdown("**Technology 2**")
+    st.markdown('<p style="font-weight: bold; color: #52BE80;">Technology 2</p>', unsafe_allow_html=True)
     tech2_name = st.text_input("Name", "Energy efficiency", key="tech2_name")
     t2c1, t2c2 = st.columns(2)
     with t2c1:
@@ -288,7 +271,7 @@ with col2:
         tech2_target_max = st.number_input("Target Max (tCO2/t)", 0.0, 1.5, 0.600, 0.01, key="tech2_max")
 
 with col3:
-    st.markdown("**Technology 3**")
+    st.markdown('<p style="font-weight: bold; color: #1E8449;">Technology 3</p>', unsafe_allow_html=True)
     tech3_name = st.text_input("Name", "CCUS", key="tech3_name")
     t3c1, t3c2 = st.columns(2)
     with t3c1:
@@ -306,23 +289,44 @@ technologies = [
 ]
 
 tech_colors = {
-    tech1_name: "#E67E22",
-    tech2_name: "#82E0AA",
-    tech3_name: "#27AE60",
-    "Base": "#8B4513",
+    tech1_name: "#17A589",  # Teal/cyan for Technology 1
+    tech2_name: "#52BE80",  # Medium green for Technology 2
+    tech3_name: "#1E8449",  # Dark green for Technology 3
+    "Base": "#6E2C00",      # Dark brown for Base/Initial
 }
+
+# Additional color constants
+COLOR_DARK_BLUE = "#1A5276"
+COLOR_LIGHT_BLUE = "#85C1E9"
+COLOR_DARK_BROWN = "#6E2C00"
+
+st.markdown("""
+To decide whether to adopt a technology, firms compare the upfront investment cost with the future savings from avoided emissions. While the upfront investment occurs on day 0, the savings will be realized over the **project lifetime**. These future savings must be discounted to account for the time value of money and the risk associated with the project, typically using a **discount rate** representing the firm's weighted average cost of capital. Finally, the savings also depend on the **expected carbon price growth** rate, which represents the firm's expectation regarding future mitigation policy.
+""")
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    project_lifetime = st.number_input("Project Lifetime (years)", 5, 40, 20)
+    st.markdown('<p style="color: gray; font-style: italic; font-size: 0.85em;">A higher project lifetime makes future savings more valuable, making investments more attractive.</p>', unsafe_allow_html=True)
+with col2:
+    discount_rate = st.number_input("Discount Rate", 0.01, 0.20, 0.10, 0.01, format="%.2f")
+    st.markdown('<p style="color: gray; font-style: italic; font-size: 0.85em;">A higher discount rate makes future savings less valuable, making investments less attractive.</p>', unsafe_allow_html=True)
+with col3:
+    carbon_price_growth = st.number_input("Expected Carbon Price Growth", 0.00, 0.15, 0.05, 0.01, format="%.2f")
+    st.markdown('<p style="color: gray; font-style: italic; font-size: 0.85em;">A higher expected growth rate makes future savings more valuable, making investments more attractive.</p>', unsafe_allow_html=True)
 
 st.markdown("---")
 
 # ============================================================================
 # SECTION 1: SIMPLE PLANT MODEL
 # ============================================================================
-st.header("1. Simple Plant Model")
+st.header("1. Single Facility Analysis")
 
 st.markdown("""
-Let's first examine how a single plant makes its technology adoption decision.
-The **carbon price threshold** is the minimum initial carbon price at which a firm would choose to invest in a technology.
-At this price, the net present value (NPV) of the investment equals zero: the discounted future savings from avoided emissions exactly offset the upfront investment cost.
+Let's first examine how these parameters affect a single plant's technology adoption decision.
+Here, you need to define the starting intensity of the plant, as well as the technology you want to evaluate.
+You will obtain a **carbon price threshold**, which represents the minimum initial carbon price at which a firm would choose to invest in the technology.
+At this price, the discounted future savings from avoided emissions exactly offset the upfront investment cost. In other words, the net present value (NPV) of the investment equals zero.
 """)
 
 col1, col2 = st.columns(2)
@@ -344,7 +348,7 @@ if emissions_avoided > 0:
         emissions_avoided * ((1 + carbon_price_growth) ** year) / ((1 + discount_rate) ** year)
         for year in t
     )
-    st.success(f"**Carbon Price Threshold for {selected_tech_name}:** {carbon_price_threshold:.1f} EUR/tCO2")
+    st.markdown(f"**Carbon Price Threshold for {selected_tech_name}:** {carbon_price_threshold:.1f} EUR/tCO2")
 else:
     carbon_price_threshold = float("inf")
     st.warning(f"Technology {selected_tech_name} does not provide emission reduction at this starting intensity.")
@@ -359,31 +363,64 @@ if emissions_avoided > 0 and carbon_price_threshold != float("inf"):
     npv_over_time = np.cumsum(discounted_cf)
     carbon_price_full = np.concatenate(([carbon_price_threshold], carbon_price))
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5), sharex=True)
+    # Create two columns: graph on left, explanation on right
+    col_dcf_graph, col_dcf_text = st.columns([3, 1])
 
-    ax1.plot(years, carbon_price_full, color="black", marker="s", linewidth=2)
-    ax1.set_ylabel("Carbon price (EUR/tCO2)")
-    ax1.set_ylim(bottom=0)
-    ax1.grid(True, alpha=0.3)
+    with col_dcf_graph:
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08,
+                           row_heights=[0.4, 0.6])
 
-    ax2.bar(years, non_discounted_cf, alpha=0.3, color="gray", label="Non-discounted")
-    ax2.bar(years, discounted_cf, color="black", label="Discounted")
-    ax2.plot(years, npv_over_time, marker="s", linewidth=2, color="black", label="NPV")
-    ax2.axhline(0, linestyle="--", linewidth=1, color="gray")
-    ax2.set_xlabel("Year")
-    ax2.set_ylabel("Cash flows (EUR)")
-    ax2.legend(loc="lower right")
+        # Top subplot: Carbon price
+        fig.add_trace(go.Scatter(x=years, y=carbon_price_full, mode='lines+markers',
+                                 marker=dict(symbol='square', size=8),
+                                 line=dict(color=COLOR_DARK_BLUE, width=2),
+                                 name='Carbon Price',
+                                 hovertemplate='Year %{x}<br>Carbon Price: %{y:.1f} EUR/tCO2<extra></extra>'),
+                     row=1, col=1)
 
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close()
+        # Bottom subplot: Cash flows
+        fig.add_trace(go.Bar(x=years, y=non_discounted_cf, name='Non-discounted',
+                            marker_color=COLOR_LIGHT_BLUE, opacity=0.7,
+                            hovertemplate='Year %{x}<br>Non-discounted: %{y:.1f} EUR<extra></extra>'),
+                     row=2, col=1)
+        fig.add_trace(go.Bar(x=years, y=discounted_cf, name='Discounted',
+                            marker_color=COLOR_DARK_BLUE,
+                            hovertemplate='Year %{x}<br>Discounted: %{y:.1f} EUR<extra></extra>'),
+                     row=2, col=1)
+        fig.add_trace(go.Scatter(x=years, y=npv_over_time, mode='lines+markers',
+                                 marker=dict(symbol='square', size=8),
+                                 line=dict(color=COLOR_DARK_BLUE, width=2),
+                                 name='NPV',
+                                 hovertemplate='Year %{x}<br>NPV: %{y:.1f} EUR<extra></extra>'),
+                     row=2, col=1)
+        fig.add_hline(y=0, line_dash="dash", line_color="gray", row=2, col=1)
+
+        fig.update_layout(
+            height=400,
+            barmode='overlay',
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(l=50, r=20, t=30, b=50),
+            plot_bgcolor='white'
+        )
+        fig.update_yaxes(title_text="Carbon price (EUR/tCO2)", row=1, col=1, rangemode='tozero',
+                        gridcolor='rgba(128,128,128,0.2)', zeroline=False)
+        fig.update_yaxes(title_text="Cash flows (EUR)", row=2, col=1,
+                        gridcolor='rgba(128,128,128,0.2)', zeroline=False)
+        fig.update_xaxes(title_text="Year", row=2, col=1, gridcolor='rgba(128,128,128,0.2)')
+        fig.update_xaxes(gridcolor='rgba(128,128,128,0.2)', row=1, col=1)
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col_dcf_text:
+        st.markdown('<p style="color: gray; font-style: italic; font-size: 0.85em;"><b>How to read this graph:</b> The top panel shows the expected carbon price trajectory starting from the threshold price. The bottom panel shows the annual cash flows: the initial investment (negative) at year 0, followed by annual savings from avoided emissions. Gray bars represent non-discounted cash flows, black bars represent discounted cash flows, and the black line shows the cumulative NPV over time. At the threshold price, the NPV reaches exactly zero at the end of the project lifetime.</p>', unsafe_allow_html=True)
 
 # Threshold Matrix
-st.subheader("Transition Threshold Matrix")
+
 st.markdown("""
-As there are usually multiple technologies available (with different investment costs and resulting improvements), this section also presents how these technologies might be adopted sequentially (i.e., if you adopt a first technology, you might need to wait longer before moving to another than if you had directly adopted technology B).This matrix shows the carbon price threshold (in EUR/tCO2) required to make each technology transition economically viable.
-Rows represent the current state, columns represent the target technology. A dash (-) indicates the transition is not beneficial
-(either same technology or the target intensity would be higher than the current one).
+The decision-making becomes a bit more tricky when multiple technologies are available.
+In this case, for a given technology, the corresponding carbon price threshold will depend on whether this is the first technology adopted by the plant or if it has already undergone adoption.
+The table below presents these tradeoffs. 
+As we can see, for a given technology, the threshold increases if it's adopted as a secondary or third technology. This is explained by the fact that the starting intensity used to evaluate the interest of the new technology is lower than in the base case.
 """)
 
 base_intensity = initial_intensity
@@ -415,10 +452,44 @@ for from_tech in all_techs:
     matrix_data.append(row)
 
 matrix_df = pd.DataFrame(matrix_data, index=[t["name"] for t in all_techs])
-st.dataframe(matrix_df, use_container_width=True)
+matrix_df.index.name = "From \\ To"
+
+# Create two columns: table on left, explanation on right
+col_matrix_table, col_matrix_text = st.columns([3, 1])
+
+with col_matrix_table:
+    # Create styled HTML table with colored headers
+    tech_names_list = [t["name"] for t in all_techs]
+
+    # Build HTML table
+    html_table = '<table style="width:100%; border-collapse: collapse; font-size: 14px;">'
+
+    # Header row
+    html_table += '<tr><th style="border: 1px solid #ddd; padding: 8px; background-color: #f5f5f5;">From \\ To</th>'
+    for col_name in tech_names_list:
+        col_color = tech_colors.get(col_name, "gray")
+        html_table += f'<th style="border: 1px solid #ddd; padding: 8px; background-color: #f5f5f5; color: {col_color}; font-weight: bold;">{col_name}</th>'
+    html_table += '</tr>'
+
+    # Data rows
+    for row_name in tech_names_list:
+        row_color = tech_colors.get(row_name, "gray")
+        html_table += f'<tr><td style="border: 1px solid #ddd; padding: 8px; color: {row_color}; font-weight: bold;">{row_name}</td>'
+        for col_name in tech_names_list:
+            value = matrix_df.loc[row_name, col_name]
+            html_table += f'<td style="border: 1px solid #ddd; padding: 8px; text-align: center;">{value}</td>'
+        html_table += '</tr>'
+
+    html_table += '</table>'
+    st.markdown(html_table, unsafe_allow_html=True)
+
+with col_matrix_text:
+    st.markdown('<p style="color: gray; font-style: italic; font-size: 0.85em;"><b>How to read this table:</b> Rows represent the current state, columns represent the target technology. Values are carbon price thresholds in EUR/tCO2. A dash (-) indicates the transition is not beneficial (either same technology or the target intensity would be higher than the current one).</p>', unsafe_allow_html=True)
 
 # Carbon price threshold by starting intensity plot
-st.subheader("Carbon Price Threshold by Starting Intensity")
+st.markdown("""
+The graphic below generalizes the previous table results for all starting intensities.
+""")
 
 intensities_t = np.linspace(0.2, 1.2, 200)
 
@@ -483,45 +554,8 @@ for start_intensity_t in intensities_t:
 # Calculate default y_max (just above max second adoption threshold, rounded up)
 default_y_max = int(np.ceil(max_second_adoption_threshold / 50) * 50) + 50 if max_second_adoption_threshold > 0 else 300
 
-# Y-axis limit control
-y_max = st.number_input("Y-axis maximum (EUR/tCO2)", 50, 1000, default_y_max, 50, key="ylim_threshold")
-
-fig, ax = plt.subplots(figsize=(12, 6))
-
-# Plot direct adoption lines
-for tech_name, (valid_intensities, thresholds) in direct_thresholds.items():
-    ax.plot(valid_intensities, thresholds, label=f"{tech_name} (direct)",
-            color=tech_colors[tech_name], linewidth=2.5, linestyle="-")
-
-# Plot incremental adoption lines
-for (tech_name, order), points in sorted(adoption_data.items(), key=lambda x: (x[0][1], x[0][0])):
-    points = sorted(points, key=lambda x: x[0])
-    x_vals = [p[0] for p in points]
-    y_vals = [p[1] for p in points]
-
-    linestyle = line_styles_incremental[order % len(line_styles_incremental)]
-    ax.plot(x_vals, y_vals, color=tech_colors[tech_name], linestyle=linestyle, linewidth=2)
-
-# Vertical line for selected intensity
-ax.axvline(x=initial_intensity, color="black", linestyle="-", linewidth=2, label=f"Selected ({initial_intensity:.3f} tCO2/t)")
-
-ax.set_xlabel("Starting emission intensity (tCO2/t)")
-ax.set_ylabel("Carbon price threshold (EUR/tCO2)")
-ax.set_xlim(0.2, 1.2)
-ax.set_ylim(0, y_max)
-ax.legend(loc="upper right")
-ax.grid(True, alpha=0.3)
-
-plt.tight_layout()
-st.pyplot(fig)
-plt.close()
-
-# Generate interpretation text
-st.markdown("**How to read this graph:**")
-
-# Find thresholds at selected intensity
+# Generate interpretation text first (needed before displaying)
 interpretation_parts = []
-adoption_sequence = []
 
 # Calculate thresholds at selected intensity for each technology
 tech_at_intensity = []
@@ -536,9 +570,10 @@ tech_at_intensity.sort(key=lambda x: x[1])
 
 if tech_at_intensity:
     first_tech = tech_at_intensity[0]
+    first_tech_color = tech_colors.get(first_tech[0], "gray")
     interpretation_parts.append(
-        f"Starting at **{initial_intensity:.3f} tCO2/t**, the first technology to become economically viable is "
-        f"**{first_tech[0]}** at a carbon price of **{first_tech[1]:.1f} EUR/tCO2** (solid line intersection with the vertical bar)."
+        f"If the facility initial intensity is <b>{initial_intensity:.3f} tCO2/t</b>, the first technology to become economically viable is "
+        f"<b style=\"color:{first_tech_color}\">{first_tech[0]}</b> at a carbon price of <b>{first_tech[1]:.1f} EUR/tCO2</b> (first intersection between the black vertical bar and a solid curve)."
     )
 
     # Check for subsequent technologies after first adoption
@@ -551,33 +586,91 @@ if tech_at_intensity:
         if final_int < new_intensity:
             threshold = calc_threshold(new_intensity, final_int, tech["investment"],
                                        project_lifetime, discount_rate, carbon_price_growth)
-            next_techs.append((tech["name"], threshold))
+            # Also get the direct adoption threshold for comparison
+            direct_final = get_final_intensity(initial_intensity, tech)
+            direct_threshold = calc_threshold(initial_intensity, direct_final, tech["investment"],
+                                              project_lifetime, discount_rate, carbon_price_growth)
+            next_techs.append((tech["name"], threshold, direct_threshold))
 
     if next_techs:
         next_techs.sort(key=lambda x: x[1])
         next_tech = next_techs[0]
+        next_tech_color = tech_colors.get(next_tech[0], "gray")
         interpretation_parts.append(
-            f"After adopting {first_tech[0]}, your intensity drops to **{new_intensity:.3f} tCO2/t**. "
-            f"From this lower intensity, **{next_tech[0]}** becomes viable at **{next_tech[1]:.1f} EUR/tCO2** "
-            f"(dashed line). This is higher than the direct adoption threshold because the emissions reduction is smaller."
+            f"After adopting <b style=\"color:{first_tech_color}\">{first_tech[0]}</b>, the facility intensity drops to <b>{new_intensity:.3f} tCO2/t</b>. "
+            f"This lower intensity impacts the carbon price threshold of the remaining technologies. "
+            f"For example, <b style=\"color:{next_tech_color}\">{next_tech[0]}</b> now becomes viable at <b>{next_tech[1]:.1f} EUR/tCO2</b> (dotted line), "
+            f"which is higher than the direct adoption threshold ({next_tech[2]:.1f} EUR/tCO2) because the emissions reduction is now smaller."
         )
 
-    # Show all direct thresholds
-    all_direct = ", ".join([f"{t[0]}: {t[1]:.1f}" for t in tech_at_intensity])
-    interpretation_parts.append(f"Direct adoption thresholds at {initial_intensity:.3f} tCO2/t: {all_direct} EUR/tCO2.")
+# Create two columns: graph on left, controls and explanation on right
+col_graph, col_controls = st.columns([3, 1])
 
-st.markdown(" ".join(interpretation_parts))
+with col_controls:
+    y_max = st.number_input("Y-axis limit", 50, 1000, default_y_max, 50, key="ylim_threshold")
+    st.markdown(f'<p style="color: gray; font-style: italic; font-size: 0.85em;"><b>How to read this graph:</b> {" ".join(interpretation_parts)}</p>', unsafe_allow_html=True)
+
+with col_graph:
+    fig = go.Figure()
+
+    # Plotly dash styles mapping
+    dash_styles = {0: 'dash', 1: 'dot', 2: 'dashdot'}
+
+    # Plot direct adoption lines
+    for tech_name, (valid_intensities, thresholds) in direct_thresholds.items():
+        fig.add_trace(go.Scatter(
+            x=valid_intensities, y=thresholds,
+            mode='lines',
+            name=f"{tech_name} (direct)",
+            line=dict(color=tech_colors[tech_name], width=2.5),
+            hovertemplate=f'{tech_name}<br>Intensity: %{{x:.3f}} tCO2/t<br>Threshold: %{{y:.1f}} EUR/tCO2<extra></extra>'
+        ))
+
+    # Plot incremental adoption lines
+    for (tech_name, order), points in sorted(adoption_data.items(), key=lambda x: (x[0][1], x[0][0])):
+        points = sorted(points, key=lambda x: x[0])
+        x_vals = [p[0] for p in points]
+        y_vals = [p[1] for p in points]
+
+        dash_style = dash_styles.get(order, 'dash')
+        fig.add_trace(go.Scatter(
+            x=x_vals, y=y_vals,
+            mode='lines',
+            name=f"{tech_name} (step {order+1})",
+            line=dict(color=tech_colors[tech_name], width=2, dash=dash_style),
+            hovertemplate=f'{tech_name} (step {order+1})<br>Intensity: %{{x:.3f}} tCO2/t<br>Threshold: %{{y:.1f}} EUR/tCO2<extra></extra>',
+            showlegend=False
+        ))
+
+    # Vertical line for selected intensity
+    fig.add_vline(x=initial_intensity, line_color=COLOR_DARK_BROWN, line_width=2,
+                  annotation_text=f"Selected ({initial_intensity:.3f})", annotation_position="top")
+
+    fig.update_layout(
+        height=500,
+        xaxis_title="Starting emission intensity (tCO2/t)",
+        yaxis_title="Carbon price threshold (EUR/tCO2)",
+        xaxis=dict(range=[0.2, 1.2], gridcolor='rgba(128,128,128,0.2)'),
+        yaxis=dict(range=[0, y_max], gridcolor='rgba(128,128,128,0.2)'),
+        legend=dict(orientation="v", yanchor="top", y=1, xanchor="right", x=1),
+        margin=dict(l=50, r=20, t=30, b=50),
+        plot_bgcolor='white'
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("---")
 
 # ============================================================================
 # SECTION 2: EMPIRICAL ANALYSIS
 # ============================================================================
-st.header("2. Empirical Analysis")
+st.header("2. Sector Analysis")
 
 st.markdown("""
-Now we apply the framework to a portfolio of plants. Upload your own data or use the default dataset of ~139 clinker production plants.
-The CSV must contain at least two columns: `production_t_per_yr` (annual production) and `production_intensity_tco2_per_t` (emission intensity in tCO2 per tonne).
+Now that we have understood technology adoption at the facility level, we can simulate the aggregate dynamics at the sector level. You can use the default dataset or upload your own data.
+The default dataset represents ~139 clinker production plants located in Europe belonging to large listed firms. It was generated using publicly available data on plant-level production and emissions from the [Global Cement and Concrete Tracker](https://globalenergymonitor.org/projects/global-cement-and-concrete-tracker/) (Global Energy Monitor) and [Climate TRACE](https://climatetrace.org/), as of October 2025.
+
+If you want to upload your own data, the CSV file must contain at least two columns: `production_t_per_yr` (annual production in tonnes) and `production_intensity_tco2_per_t` (emission intensity in tCO2 per tonne of production).
 """)
 
 uploaded_file = st.file_uploader("Upload CSV (optional)", type="csv")
@@ -598,34 +691,58 @@ df = df[required_cols].dropna()
 plant_intensities = df["production_intensity_tco2_per_t"].values  # Already in tCO2/t
 plant_productions = df["production_t_per_yr"].values
 
-st.write(f"Loaded **{len(df)}** plants | Intensity range: **{plant_intensities.min():.3f} - {plant_intensities.max():.3f} tCO2/t** | Total production: **{plant_productions.sum()/1e6:.1f} Mt/yr**")
+st.write(f"**{len(df)}** plants | Intensity range: **{plant_intensities.min():.3f} - {plant_intensities.max():.3f} tCO2/t** | Total production: **{plant_productions.sum()/1e6:.1f} Mt/yr**")
 
 # Distribution plot (no colors, just intensity bars)
-st.subheader("Distribution of Initial Intensities")
+st.markdown("""
+As we can see below, the starting intensity of plants in the sector might be heterogeneous, and will therefore lead to different technology adoption decisions among facilities.
+""")
 
-df_sorted = df.sort_values("production_intensity_tco2_per_t", ascending=False).reset_index(drop=True)
-fig, ax = plt.subplots(figsize=(12, 3))
-ax.bar(range(len(df_sorted)), df_sorted["production_intensity_tco2_per_t"], width=1, color="gray")
-ax.set_xlabel("Plants (ordered by intensity)")
-ax.set_ylabel("Intensity (tCO2/t)")
-plt.tight_layout()
-st.pyplot(fig)
-plt.close()
+# Create two columns: graph on left, explanation on right
+col_dist_graph, col_dist_text = st.columns([3, 1])
+
+with col_dist_graph:
+    df_sorted = df.sort_values("production_intensity_tco2_per_t", ascending=False).reset_index(drop=True)
+    df_sorted['plant_index'] = range(len(df_sorted))
+    df_sorted['production_mt'] = df_sorted['production_t_per_yr'] / 1e6
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=df_sorted['plant_index'],
+        y=df_sorted['production_intensity_tco2_per_t'],
+        marker_color=COLOR_DARK_BROWN,
+        hovertemplate='Plant #%{x}<br>Intensity: %{y:.3f} tCO2/t<br>Production: %{customdata:.2f} Mt/yr<extra></extra>',
+        customdata=df_sorted['production_mt']
+    ))
+
+    fig.update_layout(
+        height=250,
+        xaxis_title="Plants (ordered by intensity)",
+        yaxis_title="Intensity (tCO2/t)",
+        xaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
+        yaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
+        margin=dict(l=50, r=20, t=20, b=50),
+        plot_bgcolor='white',
+        bargap=0
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+with col_dist_text:
+    st.markdown('<p style="color: gray; font-style: italic; font-size: 0.85em;"><b>How to read this graph:</b> Each bar represents a plant, ordered from highest to lowest emission intensity. The height of the bar indicates the plant\'s carbon intensity (tCO2 per tonne of production).</p>', unsafe_allow_html=True)
 
 # Carbon Trajectory Settings
-st.subheader("Technology Adoption Over Time")
-
 st.markdown("""
-Define a carbon price trajectory over 25 years. At each year, plants evaluate whether to adopt a new technology
-based on the current carbon price and their expected growth rate. Once a technology is adopted, the plant's
-intensity decreases and it can no longer adopt that same technology.
+To simulate the sector dynamics, you can define a carbon price trajectory over 25 years. At each year, plants evaluate whether to adopt a new technology following the same decision process as in the previous section. Once a technology is adopted, the plant's intensity decreases, but alternative technologies may remain available for future adoption.
+
+Note that in this model, the decision at each year is based on the observed carbon price, not the actual future trajectory. Companies still use the expected carbon price growth rate defined in the Parameters section to evaluate their investment decisions.
 """)
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    start_carbon_price = st.number_input("Starting Carbon Price (EUR/tCO2)", 0, 500, 50)
+    start_carbon_price = st.number_input("Carbon Price Year 0 (EUR/tCO2)", 0, 500, 0)
 with col2:
-    end_carbon_price = st.number_input("Ending Carbon Price (EUR/tCO2)", 0, 1000, 300)
+    end_carbon_price = st.number_input("Carbon Price Year 25 (EUR/tCO2)", 0, 1000, 300)
 with col3:
     trajectory_shape = st.selectbox("Trajectory Shape", ["Linear", "Concave", "Convex"])
 
@@ -686,64 +803,69 @@ y_label = "Production (Mt/yr)" if display_mode else "Number of plants"
 
 years_range = np.arange(trajectory_years)
 
-# Create two subplots
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+# Create two columns: graph on left, explanation on right
+col_adoption_graph, col_adoption_text = st.columns([3, 1])
 
-# Subplot 1: Carbon price and emissions
-ax1.plot(years_range, carbon_trajectory, color="black", linewidth=2.5, linestyle="-", marker="s", markersize=4, label="Carbon Price")
-ax1.set_ylabel("Carbon Price (EUR/tCO2)")
-ax1.set_ylim(bottom=0)
-ax1.legend(loc="upper left")
-ax1.grid(True, alpha=0.3)
+with col_adoption_text:
+    # How to read section
+    st.markdown('<p style="color: gray; font-style: italic; font-size: 0.85em;"><b>How to read this graph:</b> The top panel shows the carbon price trajectory that you defined (solid line) and the resulting total sector emissions (dotted line). The bottom panel shows technology adoption: the stacked bars indicate how many plants (or production volume) use each technology at each year. Hover over the chart to see exact values.</p>', unsafe_allow_html=True)
 
-ax1_twin = ax1.twinx()
-ax1_twin.plot(years_range, total_emissions_over_time, color="black", linewidth=2.5, linestyle=":", marker="s", markersize=4, label="Emissions")
-ax1_twin.set_ylabel("Emissions (MtCO2/yr)")
-ax1_twin.legend(loc="upper right")
+# Set unit for hover templates
+unit = "Mt/yr" if display_mode else "plants"
 
-# Subplot 2: Technology adoption (stacked bar)
-bottom = np.zeros(trajectory_years)
-for name in tech_names:
-    ax2.bar(years_range, data_to_plot[name], bottom=bottom, width=0.8,
-            label=name, color=tech_colors.get(name, "gray"))
-    bottom += np.array(data_to_plot[name])
+with col_adoption_graph:
+    # Create two subplots with secondary y-axis on top
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08,
+                       row_heights=[0.4, 0.6],
+                       specs=[[{"secondary_y": True}], [{"secondary_y": False}]])
 
-ax2.set_xlabel("Year")
-ax2.set_ylabel(y_label)
-ax2.set_xlim(-0.5, trajectory_years - 0.5)
-ax2.legend(title="Technology", loc="upper left")
+    # Subplot 1: Carbon price (left axis)
+    fig.add_trace(go.Scatter(
+        x=years_range, y=carbon_trajectory,
+        mode='lines+markers',
+        marker=dict(symbol='square', size=6),
+        line=dict(color=COLOR_DARK_BLUE, width=2.5),
+        name='Carbon Price',
+        hovertemplate='Year %{x}<br>Carbon Price: %{y:.0f} EUR/tCO2<extra></extra>'
+    ), row=1, col=1, secondary_y=False)
 
-plt.tight_layout()
-st.pyplot(fig)
-plt.close()
+    # Subplot 1: Emissions (right axis)
+    fig.add_trace(go.Scatter(
+        x=years_range, y=total_emissions_over_time,
+        mode='lines+markers',
+        marker=dict(symbol='square', size=6),
+        line=dict(color=COLOR_DARK_BROWN, width=2.5, dash='dot'),
+        name='Emissions',
+        hovertemplate='Year %{x}<br>Emissions: %{y:.1f} MtCO2/yr<extra></extra>'
+    ), row=1, col=1, secondary_y=True)
 
-# Year selector for summary - compact layout
-year_options = list(range(trajectory_years))
-col_label, col_select, col_spacer = st.columns([1, 1, 4])
-with col_label:
-    st.markdown("**Select Year:**")
-with col_select:
-    selected_year = st.selectbox("Year", year_options, index=trajectory_years - 1, label_visibility="collapsed")
+    # Subplot 2: Technology adoption (stacked bar)
+    for name in tech_names:
+        fig.add_trace(go.Bar(
+            x=years_range,
+            y=data_to_plot[name],
+            name=name,
+            marker_color=tech_colors.get(name, "gray"),
+            hovertemplate=f'{name}<br>Year %{{x}}<br>Value: %{{y:.1f}} {unit}<extra></extra>'
+        ), row=2, col=1)
 
-# Build summary table
-if display_mode:
-    final_values = {name: tech_production_over_time[name][selected_year] for name in tech_names}
-    unit = "Mt/yr"
-else:
-    final_values = {name: tech_counts_over_time[name][selected_year] for name in tech_names}
-    unit = "plants"
+    fig.update_layout(
+        height=650,
+        barmode='stack',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        margin=dict(l=50, r=50, t=50, b=50),
+        plot_bgcolor='white'
+    )
 
-# Create summary as a dataframe table
-summary_data = {
-    "Carbon Price": [f"{carbon_trajectory[selected_year]:.0f} EUR/tCO2"],
-    "Emissions": [f"{total_emissions_over_time[selected_year]:.1f} MtCO2/yr"],
-}
-for name in tech_names:
-    value = final_values[name]
-    if display_mode:
-        summary_data[name] = [f"{value:.1f} {unit}"]
-    else:
-        summary_data[name] = [f"{int(value)} {unit}"]
+    # Update axes
+    fig.update_yaxes(title_text="Carbon Price (EUR/tCO2)", row=1, col=1, secondary_y=False,
+                    title_font=dict(color=COLOR_DARK_BLUE), tickfont=dict(color=COLOR_DARK_BLUE),
+                    gridcolor='rgba(128,128,128,0.2)', rangemode='tozero')
+    fig.update_yaxes(title_text="Emissions (MtCO2/yr)", row=1, col=1, secondary_y=True,
+                    title_font=dict(color=COLOR_DARK_BROWN), tickfont=dict(color=COLOR_DARK_BROWN),
+                    gridcolor='rgba(128,128,128,0.2)')
+    fig.update_yaxes(title_text=y_label, row=2, col=1, gridcolor='rgba(128,128,128,0.2)')
+    fig.update_xaxes(title_text="Year", row=2, col=1, gridcolor='rgba(128,128,128,0.2)')
+    fig.update_xaxes(gridcolor='rgba(128,128,128,0.2)', row=1, col=1)
 
-summary_df = pd.DataFrame(summary_data)
-st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    st.plotly_chart(fig, use_container_width=True)
