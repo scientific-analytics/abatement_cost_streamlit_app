@@ -219,16 +219,20 @@ def generate_carbon_trajectory(start_price, end_price, years, shape):
 
 st.set_page_config(page_title="Abatement Cost Analysis", layout="wide")
 
-st.title("Abatement Cost Analysis")
+st.title("How can we decarbonize carbon-heavy industries?")
 
 st.markdown("""
-This tool analyzes how carbon pricing influences technology adoption decisions for emission-intensive production facilities.
-It helps understand when firms will invest in cleaner technologies based on their current emission intensity and the expected carbon price trajectory.
+This tool analyzes how carbon pricing influences technology adoption for emission-intensive sectors.
+It allows you to change parameters related to the way firms take their investment decisions, define up to three different mitigation technologies, and look at the resulting dynamics for a given facility, as well as for a set of facilities that might represent a given sector/region.
 
-The analysis is structured in two parts:
-1. **Simple Plant Model**: Understand the investment decision for a single plant with a given starting intensity
-2. **Empirical Analysis**: Apply the framework to a portfolio of plants and simulate adoption dynamics over time
+The tool is organised in three sections. **Parameters** is where you can define/modify parameters related to the decision-making process of firmsand the characteristics of three mitigation technologies.
+Then, the **Single Facility Analysis** replicates a typical decision process at the facility level. Given its initial carbon intensity, at what carbon price is it effective to invest in a cleaner technology?
+Finally, the **Sector Analysis** extends the results of the facility analysis to a set of facilities representative of a sector/region (you can upload your own list of facility characteristics).
+
+The model is by definition very simplified, and it's main purpose is to be pedagogical.
 """)
+
+st.markdown('<p style="color: gray; font-style: italic;">Last update: March 2026. For any questions or feedback, please contact vincent.bouchet [at] scientificportfolio.com</p>', unsafe_allow_html=True)
 
 # ============================================================================
 # GLOBAL PARAMETERS
@@ -377,7 +381,7 @@ if emissions_avoided > 0 and carbon_price_threshold != float("inf"):
 # Threshold Matrix
 st.subheader("Transition Threshold Matrix")
 st.markdown("""
-This matrix shows the carbon price threshold (in EUR/tCO2) required to make each technology transition economically viable.
+As there are usually multiple technologies available (with different investment costs and resulting improvements), this section also presents how these technologies might be adopted sequentially (i.e., if you adopt a first technology, you might need to wait longer before moving to another than if you had directly adopted technology B).This matrix shows the carbon price threshold (in EUR/tCO2) required to make each technology transition economically viable.
 Rows represent the current state, columns represent the target technology. A dash (-) indicates the transition is not beneficial
 (either same technology or the target intensity would be higher than the current one).
 """)
